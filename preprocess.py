@@ -6,6 +6,7 @@ from master_utils import create_years_played_data
 from awards_utils import create_grouped_award_df
 from allstar_utility import create_grouped_all_star_df
 from merge_dfs import merge_dfs
+from ped_users_utils import create_grouped_ped_users_df
 
 def get_df_for_modeling():
     batting_df = pd.read_csv("batting.csv")
@@ -37,6 +38,11 @@ def get_df_for_modeling():
     
     awards_players_df = pd.read_csv("awardsplayers.csv")
     grouped_awards_players_df = create_grouped_award_df(awards_players_df)
+    
+    ped_users_df = pd.read_csv("steroidusers.csv")
+    grouped_ped_users = create_grouped_ped_users_df(ped_users_df)
+    
+    print(grouped_ped_users)
 
     # start joining dfs
 
@@ -47,14 +53,15 @@ def get_df_for_modeling():
     fifth_merge_df = pd.merge(fourth_merge_df, grouped_reg_pitching_df, on="playerID", how="outer")
     sixth_merge_df = pd.merge(fifth_merge_df, grouped_post_pitching_df, on="playerID", how="outer")
     seventh_merge_df = pd.merge(sixth_merge_df, grouped_awards_players_df, on="playerID", how="outer")
+    eigth_merge_df = pd.merge(seventh_merge_df, grouped_ped_users, on="playerID", how="outer")
     
-    seventh_merge_df = seventh_merge_df.fillna(0)
-    seventh_merge_df = seventh_merge_df.replace([np.inf, -np.inf], 0)
+    eigth_merge_df = eigth_merge_df.fillna(0)
+    eigth_merge_df = eigth_merge_df.replace([np.inf, -np.inf], 0)
     
     # best precision = 0.8
-    # cols = ['ASGs', 'inducted', 'PitchingTripleCrowns', 'TripleCrowns', 'MVPs', 'CyYoungs', 'GoldGloves']
     cols = ['ASGs', 'inducted', 'PitchingTripleCrowns', 'TripleCrowns', 'MVPs', 'CyYoungs', 'GoldGloves']
+    # cols = ['ASGs', 'inducted', 'PitchingTripleCrowns', 'TripleCrowns', 'MVPs', 'CyYoungs', 'GoldGloves', 'PEDUser']
     
-    modeling_df = seventh_merge_df[cols]
+    modeling_df = eigth_merge_df[cols]
 
     return modeling_df

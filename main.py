@@ -1,4 +1,5 @@
 from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 from preprocess import get_df_for_modeling
@@ -27,10 +28,14 @@ y = df[label_col]
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 clf = DecisionTreeClassifier()
+# clf = RandomForestClassifier()
 
 clf = clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)
+
+# get rid of the steroid users with a column
+# find playerID and if they played during the steroid era and won awards
 
 print(metrics.confusion_matrix(y_test, y_pred))
 print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
