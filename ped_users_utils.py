@@ -4,9 +4,10 @@
 
 import pandas as pd
 
-def create_grouped_ped_users_df(df):
-    unique_players = df['playerID'].unique()
 
-    data = {'playerID': unique_players, 'PEDUser': 1}
-    
+def create_grouped_ped_users_df(df):
+    unique_players = df["playerID"].unique()
+
+    data = {"playerID": unique_players, "PEDUser": 1}
+
     return pd.DataFrame(data)
