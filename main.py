@@ -20,11 +20,24 @@ df = get_df_for_modeling()
 # print("df.corr()")
 # print(df.corr())
 
-label_name = "inducted"
+# print(df)
+
+# best precision = 0.8
+# cols = ['ASGs', 'inducted', 'PitchingTripleCrowns', 'TripleCrowns', 'MVPs', 'CyYoungs', 'GoldGloves']
 all_cols = list(df.columns.values)
 
-feature_cols = [x for x in all_cols if x != label_name]
-label_col = [label_name]
+print(all_cols)
+
+feature_cols = [
+    "ASGs",
+    "PitchingTripleCrowns",
+    "TripleCrowns",
+    "MVPs",
+    "CyYoungs",
+    "GoldGloves",
+    "PEDUser",
+]
+label_col = ["inducted"]
 
 print(feature_cols)
 print(label_col)
@@ -34,9 +47,16 @@ y = df[label_col]
 
 # print(y.value_counts())
 
+# minimal_necessary_accuracy = 1 - (rows_grouped_hof_df / rows_master_df)
+
+# print(minimal_necessary_accuracy)
+
 # correlation_matrix = X.corr()
 
 # print(correlation_matrix)
+
+# print(X)
+# print(y)
 
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=42
@@ -54,7 +74,7 @@ models["Decision Tree Classifier"] = DecisionTreeClassifier()
 models["Random Forest Classifier"] = RandomForestClassifier()
 models["Gradient Boosting Classifier"] = GradientBoostingClassifier()
 models["XGBoost"] = xgb.XGBClassifier()
-models["LightGBM"] = lgb.LGBMClassifier()
+# models["LightGBM"] = lgb.LGBMClassifier()
 models["Logistic Regression"] = LogisticRegression()
 models["Linear SVC"] = LinearSVC()
 models["Gaussian NB"] = GaussianNB()

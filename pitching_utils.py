@@ -1,4 +1,23 @@
-def create_grouped_pitching_df(df, isPostSeason=False):
+import pandas as pd
+
+
+def create_reg_season_grouped_pitching_df():
+    df = pd.read_csv("pitching.csv")
+
+    return create_grouped_pitching_df(df)
+
+
+def create_post_season_grouped_pitching_df():
+    df = pd.read_csv("pitchingpost.csv")
+
+    grouped_df = create_grouped_pitching_df(df)
+    grouped_df = grouped_df.add_prefix("post_")
+    grouped_df = grouped_df.rename(columns={"post_playerID": "playerID"})
+
+    return grouped_df
+
+
+def create_grouped_pitching_df(df):
     grouped_df = (
         df[
             [
@@ -37,11 +56,7 @@ def create_grouped_pitching_df(df, isPostSeason=False):
     grouped_df["KPer9"] = 27 * (grouped_df["SO"] / grouped_df["IPouts"])
     grouped_df = grouped_df.fillna(0)
 
-    feature_cols = ["playerID", "H", "SO"]
-    grouped_df = grouped_df[feature_cols]
-
-    if isPostSeason:
-        grouped_df = grouped_df.add_prefix("post_")
-        grouped_df = grouped_df.rename(columns={"post_playerID": "playerID"})
+    grouped_df = grouped_df.add_prefix("pitching_")
+    grouped_df = grouped_df.rename(columns={"pitching_playerID": "playerID"})
 
     return grouped_df

@@ -1,4 +1,23 @@
-def create_grouped_batting_df(df, isPostSeason=False):
+import pandas as pd
+
+
+def create_reg_season_grouped_batting_df():
+    df = pd.read_csv("batting.csv")
+    return create_grouped_batting_df(df)
+
+
+def create_post_season_grouped_batting_df():
+    df = pd.read_csv("battingpost.csv")
+
+    grouped_df = create_grouped_batting_df(df)
+    grouped_df = grouped_df.add_prefix("post_")
+    grouped_df = grouped_df.rename(columns={"post_playerID": "playerID"})
+
+    return grouped_df
+
+
+def create_grouped_batting_df(df):
+
     grouped_df = (
         df[
             [
@@ -41,12 +60,7 @@ def create_grouped_batting_df(df, isPostSeason=False):
     grouped_df["SBP"] = grouped_df["SB"] / (grouped_df["SB"] + grouped_df["CS"])
     grouped_df = grouped_df.fillna(0)
 
-    feature_cols = ["playerID", "H"]
-
-    grouped_df = grouped_df[feature_cols]
-
-    if isPostSeason:
-        grouped_df = grouped_df.add_prefix("post_")
-        grouped_df = grouped_df.rename(columns={"post_playerID": "playerID"})
+    grouped_df = grouped_df.add_prefix("batting_")
+    grouped_df = grouped_df.rename(columns={"batting_playerID": "playerID"})
 
     return grouped_df

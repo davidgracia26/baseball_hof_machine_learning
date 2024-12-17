@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from merge_dfs import merge_dfs
 
 
 def create_grouped_award_category_df(df, filter_column, award_column):
@@ -15,7 +16,9 @@ def create_grouped_award_category_df(df, filter_column, award_column):
     return grouped_filtered_df
 
 
-def create_grouped_award_df(df):
+def create_grouped_award_df():
+    df = pd.read_csv("awardsplayers.csv")
+
     grouped_pitching_triple_crown_df = create_grouped_award_category_df(
         df, "Pitching Triple Crown", "PitchingTripleCrowns"
     )
@@ -60,24 +63,24 @@ def create_grouped_award_df(df):
 
     # merge these
 
-    int1_df = pd.merge(
+    dfs_to_merge = [
         grouped_pitching_triple_crown_df,
         grouped_triple_crown_df,
-        on="playerID",
-        how="outer",
-    )
-    int2_df = pd.merge(int1_df, grouped_mvp_df, on="playerID", how="outer")
-    int3_df = pd.merge(int2_df, grouped_roy_df, on="playerID", how="outer")
-    int4_df = pd.merge(int3_df, grouped_ws_mvp_df, on="playerID", how="outer")
-    int5_df = pd.merge(int4_df, grouped_cy_young_df, on="playerID", how="outer")
-    int6_df = pd.merge(int5_df, grouped_gold_glove_df, on="playerID", how="outer")
-    int7_df = pd.merge(int6_df, grouped_all_star_mvp_df, on="playerID", how="outer")
-    int8_df = pd.merge(int7_df, grouped_rolaids_relief_df, on="playerID", how="outer")
-    int9_df = pd.merge(int8_df, grouped_nlcs_mvp_df, on="playerID", how="outer")
-    int10_df = pd.merge(int9_df, grouped_alcs_mvp_df, on="playerID", how="outer")
-    int11_df = pd.merge(int10_df, grouped_silver_slugger_df, on="playerID", how="outer")
+        grouped_mvp_df,
+        grouped_roy_df,
+        grouped_ws_mvp_df,
+        grouped_cy_young_df,
+        grouped_gold_glove_df,
+        grouped_all_star_mvp_df,
+        grouped_rolaids_relief_df,
+        grouped_nlcs_mvp_df,
+        grouped_alcs_mvp_df,
+        grouped_silver_slugger_df,
+    ]
 
-    int11_df = int11_df.fillna(0)
-    int11_df = int11_df.replace([np.inf, -np.inf], 0)
+    merged_df = merge_dfs(dfs_to_merge)
 
-    return int11_df
+    merged_df = merged_df.fillna(0)
+    merged_df = merged_df.replace([np.inf, -np.inf], 0)
+
+    return merged_df

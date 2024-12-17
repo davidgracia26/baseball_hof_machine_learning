@@ -1,6 +1,11 @@
-def create_grouped_all_star_df(all_star_df):
+import pandas as pd
+
+
+def create_grouped_all_star_df():
+    df = pd.read_csv("allstarfull.csv")
+
     grouped_all_star_df = (
-        all_star_df[["playerID", "gameNum"]]
+        df[["playerID", "gameNum"]]
         .groupby(["playerID"], dropna=False, as_index=False)
         .sum()
     )

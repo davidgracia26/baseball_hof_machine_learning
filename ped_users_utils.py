@@ -5,7 +5,9 @@
 import pandas as pd
 
 
-def create_grouped_ped_users_df(df):
+def create_grouped_ped_users_df():
+    df = pd.read_csv("steroidusers.csv")
+
     unique_players = df["playerID"].unique()
 
     data = {"playerID": unique_players, "PEDUser": 1}

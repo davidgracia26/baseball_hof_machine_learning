@@ -1,6 +1,14 @@
 import pandas as pd
 
 
+def create_master_data():
+    df = pd.read_csv("master.csv")
+
+    cols = ["playerID", "nameFirst", "nameLast"]
+
+    return df[cols]
+
+
 def create_years_played_data(batting_df, pitching_df):
     batting_test_df = batting_df[["playerID", "yearID"]].sort_values(
         by=["playerID", "yearID"]
