@@ -54,6 +54,7 @@ def create_grouped_pitching_df(df):
     grouped_df["ERA"] = 27 * (grouped_df["ER"] / grouped_df["IPouts"])
     grouped_df["WHIP"] = 3 * (grouped_df["BB"] + grouped_df["H"]) / grouped_df["IPouts"]
     grouped_df["KPer9"] = 27 * (grouped_df["SO"] / grouped_df["IPouts"])
+    grouped_df["Pitcher"] = 1
     grouped_df = grouped_df.fillna(0)
 
     grouped_df = grouped_df.add_prefix("pitching_")
