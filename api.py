@@ -2,7 +2,7 @@ from fastapi import FastAPI
 import pandas as pd
 from pydantic import BaseModel
 import pickle
-from preprocess import get_df_for_modeling
+from preprocess import Preprocess
 
 
 class SearchPlayersRequest(BaseModel):
@@ -73,7 +73,7 @@ def search_players(request: SearchPlayersRequest):
 # need to be able to pass playerID
 @app.post("/predict_hof")
 def predict_hof(request: PredictHallOfFameRequest):
-    df = get_df_for_modeling()
+    df = Preprocess().get_df_for_modeling()
 
     filtered_df = df[(df["playerID"].str.lower() == request.playerId.lower())]
 

@@ -5,11 +5,15 @@
 import pandas as pd
 
 
-def create_grouped_ped_users_df():
-    df = pd.read_csv("steroidusers.csv")
+class PedUsersUtils:
+    def __init__(self):
+        pass
 
-    unique_players = df["playerID"].unique()
+    def create_grouped_ped_users_df(self):
+        df = pd.read_csv("steroidusers.csv")
 
-    data = {"playerID": unique_players, "PEDUser": 1}
+        unique_players = df["playerID"].unique()
 
-    return pd.DataFrame(data)
+        data = {"playerID": unique_players, "PEDUser": 1}
+
+        return pd.DataFrame(data)

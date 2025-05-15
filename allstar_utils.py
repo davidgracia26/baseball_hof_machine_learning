@@ -1,15 +1,19 @@
 import pandas as pd
 
 
-def create_grouped_all_star_df():
-    df = pd.read_csv("allstarfull.csv")
+class AllStarUtils:
+    def __init__(self):
+        pass
 
-    grouped_all_star_df = (
-        df[["playerID", "gameNum"]]
-        .groupby(["playerID"], dropna=False, as_index=False)
-        .sum()
-    )
+    def create_grouped_all_star_df(self):
+        df = pd.read_csv("allstarfull.csv")
 
-    grouped_all_star_df = grouped_all_star_df.rename(columns={"gameNum": "ASGs"})
+        grouped_all_star_df = (
+            df[["playerID", "gameNum"]]
+            .groupby(["playerID"], dropna=False, as_index=False)
+            .sum()
+        )
 
-    return grouped_all_star_df
+        grouped_all_star_df = grouped_all_star_df.rename(columns={"gameNum": "ASGs"})
+
+        return grouped_all_star_df

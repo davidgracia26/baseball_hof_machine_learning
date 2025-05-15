@@ -9,7 +9,7 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.svm import OneClassSVM
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
-from preprocess import get_df_for_modeling
+from preprocess import Preprocess
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
 import xgboost as xgb
@@ -28,8 +28,6 @@ from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import StratifiedKFold
 from sklearn.linear_model import Lasso
 import numpy as np
-
-
 import pprint
 
 # pitching_Pitcher
@@ -37,8 +35,8 @@ import pprint
 # batting_Batter
 # post_batting_Batter
 
-
-df = get_df_for_modeling()
+preprocess = Preprocess()
+df = preprocess.get_df_for_modeling()
 # df = df.loc[(df["pitching_Pitcher"] == 1) | (df["post_pitching_Pitcher"] == 1)]
 # df = df.loc[(df["batting_Batter"] == 1) | (df["post_batting_Batter"] == 1)]
 
