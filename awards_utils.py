@@ -20,7 +20,7 @@ class AwardsUtils:
         return grouped_filtered_df
 
     def create_grouped_award_df(self):
-        df = pd.read_csv("awardsplayers.csv")
+        df = pd.read_csv("source_data/awardsplayers.csv")
 
         grouped_pitching_triple_crown_df = self.create_grouped_award_category_df(
             df, "Pitching Triple Crown", "PitchingTripleCrowns"

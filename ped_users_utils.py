@@ -10,7 +10,7 @@ class PedUsersUtils:
         pass
 
     def create_grouped_ped_users_df(self):
-        df = pd.read_csv("steroidusers.csv")
+        df = pd.read_csv("source_data/steroidusers.csv")
 
         unique_players = df["playerID"].unique()
 

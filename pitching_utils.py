@@ -6,12 +6,12 @@ class PitchingUtils:
         pass
 
     def create_reg_season_grouped_pitching_df(self):
-        df = pd.read_csv("pitching.csv")
+        df = pd.read_csv("source_data/pitching.csv")
 
         return self.create_grouped_pitching_df(df)
 
     def create_post_season_grouped_pitching_df(self):
-        df = pd.read_csv("pitchingpost.csv")
+        df = pd.read_csv("source_data/pitchingpost.csv")
 
         grouped_df = self.create_grouped_pitching_df(df)
         grouped_df = grouped_df.add_prefix("post_")

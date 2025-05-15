@@ -6,7 +6,7 @@ class MasterUtils:
         pass
 
     def create_master_data(self):
-        df = pd.read_csv("master.csv")
+        df = pd.read_csv("source_data/master.csv")
 
         cols = ["playerID", "nameFirst", "nameLast"]
 

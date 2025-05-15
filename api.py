@@ -15,7 +15,7 @@ class PredictHallOfFameRequest(BaseModel):
 
 
 def create_players(request: SearchPlayersRequest):
-    df = pd.read_csv("master.csv")
+    df = pd.read_csv("source_data/master.csv")
 
     cols = [
         "playerID",
@@ -90,7 +90,7 @@ def predict_hof(request: PredictHallOfFameRequest):
 
     X = filtered_df[feature_cols]
 
-    with open("Linear SVC.pkl", "rb") as f:
+    with open("trained_models/Linear SVC.pkl", "rb") as f:
         clf2 = pickle.load(f)
 
     prediction = clf2.predict(X).tolist()

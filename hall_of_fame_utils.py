@@ -6,7 +6,7 @@ class HallOfFameUtils:
         pass
 
     def create_grouped_hall_of_fame_df(self):
-        df = pd.read_csv("halloffame.csv")
+        df = pd.read_csv("source_data/halloffame.csv")
         grouped_hof_df = df.loc[(df["category"] == "Player") & (df["inducted"] == "Y")][
             ["playerID", "inducted"]
         ]

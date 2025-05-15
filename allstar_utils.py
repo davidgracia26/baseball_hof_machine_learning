@@ -6,7 +6,7 @@ class AllStarUtils:
         pass
 
     def create_grouped_all_star_df(self):
-        df = pd.read_csv("allstarfull.csv")
+        df = pd.read_csv("source_data/allstarfull.csv")
 
         grouped_all_star_df = (
             df[["playerID", "gameNum"]]

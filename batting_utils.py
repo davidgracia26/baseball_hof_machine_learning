@@ -6,11 +6,11 @@ class BattingUtils:
         pass
 
     def create_reg_season_grouped_batting_df(self):
-        df = pd.read_csv("batting.csv")
+        df = pd.read_csv("source_data/batting.csv")
         return self.create_grouped_batting_df(df)
 
     def create_post_season_grouped_batting_df(self):
-        df = pd.read_csv("battingpost.csv")
+        df = pd.read_csv("source_data/battingpost.csv")
 
         grouped_df = self.create_grouped_batting_df(df)
         grouped_df = grouped_df.add_prefix("post_")

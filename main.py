@@ -29,6 +29,7 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.linear_model import Lasso
 import numpy as np
 import pprint
+import os
 
 # pitching_Pitcher
 # post_pitching_Pitcher
@@ -333,11 +334,16 @@ models["MLP Classifier"] = MLPClassifier()
 
 accuracy, precision, recall = {}, {}, {}
 
+folder_path = "trained_models/"
+os.makedirs(folder_path, exist_ok=True)
+
 for key in models.keys():
     models[key].fit(X_train, y_train.values.ravel())
 
+    file_name = f"{key}.pkl"
+    full_path = f"{folder_path}{file_name}"
     # save
-    with open(f"{key}.pkl", "wb") as f:
+    with open(full_path, "wb") as f:
         pickle.dump(models[key], f)
 
     predictions = models[key].predict(X_test)
