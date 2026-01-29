@@ -53,9 +53,13 @@ class BattingUtils:
             + 3 * grouped_df["3B"]
             + 4 * grouped_df["HR"]
         )
-        grouped_df["OBP"] = (grouped_df["H"] + grouped_df["BB"] + grouped_df["HBP"]) / (
+        grouped_df["PA"] = (
             grouped_df["AB"] + grouped_df["BB"] + grouped_df["HBP"] + grouped_df["SF"]
         )
+        grouped_df["OBP"] = (grouped_df["H"] + grouped_df["BB"] + grouped_df["HBP"]) / (
+            grouped_df["PA"]
+        )
+        grouped_df["AVG"] = grouped_df["H"] / grouped_df["AB"]
         grouped_df["SLG"] = grouped_df["TB"] / grouped_df["AB"]
         grouped_df["OPS"] = grouped_df["OBP"] + grouped_df["SLG"]
         grouped_df["SBP"] = grouped_df["SB"] / (grouped_df["SB"] + grouped_df["CS"])
