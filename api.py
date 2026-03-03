@@ -77,10 +77,14 @@ def predict_hof_batch(request: PredictHallOfFameRequest):
     df = Preprocess().get_df_for_modeling_hitters()
 
     MODEL_DIR = "trained_models_v2"
-    with open(os.path.join(MODEL_DIR, "global_standard_scaler.pkl"), "rb") as f:
+    scalers_path = os.path.join(MODEL_DIR, "scalers")
+    models_path = os.path.join(MODEL_DIR, "models")
+    with open(
+        os.path.join(scalers_path, "hitter_global_standard_scaler.pkl"), "rb"
+    ) as f:
         scaler = pickle.load(f)
     with open(
-        os.path.join(MODEL_DIR, "StratifiedKFold_LinearSVC_model.pkl"), "rb"
+        os.path.join(models_path, "hitter_StratifiedKFold_LinearSVC_model.pkl"), "rb"
     ) as f:
         model = pickle.load(f)
 
@@ -139,10 +143,14 @@ def predict_hof_batch(request: PredictHallOfFameRequest):
     df = Preprocess().get_df_for_modeling_pitchers()
 
     MODEL_DIR = "trained_models_v2"
-    with open(os.path.join(MODEL_DIR, "global_standard_scaler.pkl"), "rb") as f:
+    scalers_path = os.path.join(MODEL_DIR, "scalers")
+    models_path = os.path.join(MODEL_DIR, "models")
+    with open(
+        os.path.join(scalers_path, "pitcher_global_standard_scaler.pkl"), "rb"
+    ) as f:
         scaler = pickle.load(f)
     with open(
-        os.path.join(MODEL_DIR, "StratifiedKFold_LinearSVC_model.pkl"), "rb"
+        os.path.join(models_path, "pitcher_StratifiedKFold_LinearSVC_model.pkl"), "rb"
     ) as f:
         model = pickle.load(f)
 
