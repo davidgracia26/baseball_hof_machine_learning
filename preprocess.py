@@ -46,8 +46,6 @@ class Preprocess:
             grouped_post_season_batting_df,
             grouped_hall_of_fame_df,
             master_df,
-            # grouped_reg_season_pitching_df,
-            # grouped_post_season_pitching_df,
             grouped_allstar_df,
             grouped_awards_players_df,
             grouped_ped_users,
