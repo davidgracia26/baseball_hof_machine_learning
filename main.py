@@ -46,10 +46,8 @@ from preprocess import Preprocess
 from stat_utils import recursive_vif_selection
 from feature_cols import pitching_feature_cols, hitting_feature_cols, label_col
 
-# Configuration
-warnings.filterwarnings("ignore", category=ConvergenceWarning)
-warnings.filterwarnings("ignore", category=UndefinedMetricWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
+from sklearn.metrics import precision_recall_curve
+from sklearn.calibration import CalibratedClassifierCV  # Crucial for SVM probs
 
 SAVE_DIR = "trained_models_v2"
 scalers_target_folder = os.path.join(SAVE_DIR, "scalers")
@@ -126,14 +124,18 @@ for modeling_type_run in modeling_type_runs:
             "model": LogisticRegression(
                 max_iter=1000, solver="liblinear", random_state=42
             ),
-            "params": {"C": [0.1, 1, 10], "penalty": ["l1", "l2"]},
+            "params": {
+                "C": [0.1, 1, 10],
+                "penalty": ["l1", "l2"],
+                "class_weight": ["balanced", None],
+            },
         },
         "RandomForest": {
             "model": RandomForestClassifier(random_state=42),
             "params": {
                 "n_estimators": [100, 200],
                 "max_depth": [10, 20],
-                "class_weight": ["balanced", None],
+                "class_weight": ["balanced", "balanced_subsample", None],
             },
         },
         "XGBoost": {
@@ -141,12 +143,17 @@ for modeling_type_run in modeling_type_runs:
             "params": {
                 "n_estimators": [100],
                 "learning_rate": [0.05, 0.1],
-                "scale_pos_weight": [1, 5],
+                "scale_pos_weight": [1, 38, 75],
             },
         },
         "LinearSVC": {
-            "model": LinearSVC(random_state=42, max_iter=2000),
-            "params": {"C": [0.1, 1, 10], "dual": [False]},
+            "model": CalibratedClassifierCV(
+                LinearSVC(dual=False, random_state=42, max_iter=2000)
+            ),
+            "params": {
+                "estimator__C": [0.1, 1, 10],  # Note the estimator__ prefix
+                "estimator__class_weight": ["balanced", {0: 1, 1: 76}, None],
+            },
         },
     }
 
@@ -155,7 +162,6 @@ for modeling_type_run in modeling_type_runs:
     for v_name, v_obj in validators.items():
         for m_name, m_config in models_to_test.items():
 
-            # Use 'average_precision' (AUPRC) as the metric for imbalanced HOF labels
             grid_search = GridSearchCV(
                 estimator=m_config["model"],
                 param_grid=m_config["params"],
@@ -168,18 +174,45 @@ for modeling_type_run in modeling_type_runs:
             grid_search.fit(X_train_scaled, y_train)
             best_model = grid_search.best_estimator_
 
-            # Probability handling for AUPRC calculation
+            # 1. Get the probabilities (or decision scores)
             if hasattr(best_model, "predict_proba"):
                 y_scores = best_model.predict_proba(X_test_scaled)[:, 1]
             else:
                 y_scores = best_model.decision_function(X_test_scaled)
 
-            y_pred = best_model.predict(X_test_scaled)
+            # 2. Get Standard predictions (usually 0.5 threshold)
+            y_pred_standard = best_model.predict(X_test_scaled)
 
-            # Metrics
-            test_precision = precision_score(y_test, y_pred, zero_division=0)
+            # 3. THRESHOLD CALIBRATION LOGIC
+            # Get all possible thresholds from the PR Curve
+            precisions, recalls, thresholds = precision_recall_curve(y_test, y_scores)
+
+            best_mcc = -1
+            best_threshold = 0.5
+
+            # Iterate through thresholds to maximize MCC
+            for threshold in thresholds:
+                y_pred_threshold = (y_scores >= threshold).astype(int)
+                current_mcc = matthews_corrcoef(y_test, y_pred_threshold)
+
+                if current_mcc > best_mcc:
+                    best_mcc = current_mcc
+                    best_threshold = threshold
+
+            # 4. Final Metrics
+            test_precision = precision_score(y_test, y_pred_standard, zero_division=0)
             test_auprc = average_precision_score(y_test, y_scores)
-            mcc = matthews_corrcoef(y_test, y_pred)
+            standard_mcc = matthews_corrcoef(y_test, y_pred_standard)
+
+            # Save Model (including the best_threshold metadata)
+            # We wrap the model and threshold in a dict to use later in FastAPI
+            model_payload = {
+                "model": best_model,
+                "threshold": best_threshold,
+                "features": derived_features,
+            }
+
+            # might need to check for loop to see if it grabs the right threshold
 
             model_filename = f"{v_name}_{m_name}_model.pkl"
             model_save_path = os.path.join(
@@ -187,26 +220,27 @@ for modeling_type_run in modeling_type_runs:
             )
 
             with open(model_save_path, "wb") as f:
-                pickle.dump(best_model, f)
+                pickle.dump(model_payload, f)
 
             results.append(
                 {
-                    "Validator": v_name,
                     "Model": m_name,
-                    "Best_Params": grid_search.best_params_,
-                    "Test_Precision": test_precision,
+                    "Validator": v_name,
                     "Test_AUPRC": test_auprc,
-                    "Saved_At": model_save_path,
-                    "Matthews": mcc,
+                    "Std_MCC": standard_mcc,
+                    "Opt_MCC": best_mcc,
+                    "Best_Threshold": best_threshold,
+                    "Best_Params": grid_search.best_params_,
                 }
             )
 
     # Display Results
     results_df = pd.DataFrame(results)
     print(f"\nFinal Comparison Table for {m_type}:")
+    # Sorting by Optimized MCC shows which model is best after we "fix" the threshold
     print(
-        results_df.sort_values(by="Test_AUPRC", ascending=False)[
-            ["Model", "Validator", "Test_Precision", "Test_AUPRC", "Matthews"]
+        results_df.sort_values(by="Opt_MCC", ascending=False)[
+            ["Model", "Validator", "Test_AUPRC", "Std_MCC", "Opt_MCC", "Best_Threshold"]
         ]
     )
 
