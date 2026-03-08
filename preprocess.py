@@ -45,7 +45,7 @@ def reg_season_batting_z_score_df():
     career_z_scores.to_csv("hitter_z_scores.csv", index=False)
 
 
-t_method()
+reg_season_batting_z_score_df()
 
 
 class Preprocess:
