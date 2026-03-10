@@ -37,7 +37,7 @@ class PitchingUtils:
                     "HR",
                     "BB",
                     "SO",
-                    "BAOpp",
+                    # "BAOpp",
                     "IBB",
                     "WP",
                     "HBP",
@@ -83,7 +83,6 @@ class PitchingUtils:
         grouped_df["BAbip"] = (grouped_df["H"] - grouped_df["HR"]) / (
             grouped_df["AB"] - grouped_df["SO"] - grouped_df["HR"] + grouped_df["SF"]
         )
-        grouped_df["Pitcher"] = 1
         grouped_df = grouped_df.fillna(0)
 
         grouped_df = grouped_df.add_prefix("pitching_")

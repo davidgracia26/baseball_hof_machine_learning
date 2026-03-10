@@ -1,250 +1,275 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pickle
 import os
-import warnings
-import sys
 import pprint
-
-# Model Imports
-from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+import warnings
+from sklearn.svm import LinearSVC
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.svm import LinearSVC, SVC
-from sklearn.naive_bayes import GaussianNB
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.neural_network import MLPClassifier
 import xgboost as xgb
-import lightgbm as lgb
-
-# Selection & Preprocessing
 from sklearn.model_selection import (
     train_test_split,
     GridSearchCV,
-    RandomizedSearchCV,
     StratifiedKFold,
-    KFold,
-    ShuffleSplit,
     RepeatedStratifiedKFold,
 )
 from sklearn.preprocessing import StandardScaler
+from sklearn.feature_selection import RFECV
 from sklearn.metrics import (
-    precision_score,
-    classification_report,
-    average_precision_score,
-    PrecisionRecallDisplay,
-    confusion_matrix,
+    precision_recall_curve,
     matthews_corrcoef,
+    average_precision_score,
+    precision_score,
+    make_scorer,
 )
-from sklearn.exceptions import ConvergenceWarning, UndefinedMetricWarning
+from sklearn.calibration import CalibratedClassifierCV
+from skrebate import ReliefF
 
-# Custom Utils (Assuming these exist in your environment)
-from ml_utils import print_confusion_matrix, get_scores
+# Custom Imports (Ensure these files are in your directory)
 from preprocess import Preprocess
 from stat_utils import recursive_vif_selection
-from feature_cols import pitching_feature_cols, hitting_feature_cols, label_col
+from feature_cols import (
+    get_pitching_feature_cols,
+    get_hitting_feature_cols,
+    get_label_col,
+)
+from interpret.glassbox import ExplainableBoostingClassifier
+from imblearn.ensemble import BalancedRandomForestClassifier
 
-from sklearn.metrics import precision_recall_curve
-from sklearn.calibration import CalibratedClassifierCV  # Crucial for SVM probs
-
-SAVE_DIR = "trained_models_v2"
-scalers_target_folder = os.path.join(SAVE_DIR, "scalers")
-models_target_folder = os.path.join(SAVE_DIR, "models")
-
-for folder in [SAVE_DIR, scalers_target_folder, models_target_folder]:
-    if not os.path.exists(folder):
-        os.makedirs(folder)
+# 1. SETUP & CONFIGURATION
+VIF_THRESHOLDS = [5.01, 10.01]
+BASE_SAVE_DIR = "vif_threshold_study"
+os.makedirs(BASE_SAVE_DIR, exist_ok=True)
 
 preprocess = Preprocess()
+study_summary = []
 
 modeling_type_runs = [
     {
         "type": "hitter",
         "df": preprocess.get_df_for_modeling_hitters(),
-        "feature_cols": hitting_feature_cols,
+        "feature_cols": get_hitting_feature_cols,
     },
     {
         "type": "pitcher",
         "df": preprocess.get_df_for_modeling_pitchers(),
-        "feature_cols": pitching_feature_cols,
+        "feature_cols": get_pitching_feature_cols,
     },
 ]
 
+# 2. MAIN EXECUTION LOOP
 for modeling_type_run in modeling_type_runs:
     df = modeling_type_run["df"]
-    feature_cols = modeling_type_run["feature_cols"]
     m_type = modeling_type_run["type"]
-    pprint.pprint(
-        f"model type: {m_type}, HOF percent: {df[label_col].value_counts(normalize=True) * 100}"
-    )
-    # hitter 1.310553% 9.38
-    # pitcher 1.310553% 8.66
+    feature_cols = modeling_type_run["feature_cols"](df)
+    label_col = get_label_col()
 
     X = df[feature_cols]
     y = df[label_col]
 
-    # Use stratify=y to maintain class balance in the split
+    # Split once per player type to keep comparisons fair
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
 
-    # Feature Selection via VIF
-    derived_features = recursive_vif_selection(
-        X_train[feature_cols], vif_threshold=5.01
-    ).columns.tolist()
+    for threshold in VIF_THRESHOLDS:
+        print(f"\n{'='*40}")
+        print(f"RUNNING: {m_type.upper()} | VIF THRESHOLD: {threshold}")
+        print(f"{'='*40}")
 
-    pprint.pprint(f"model type: {m_type}")
-    pprint.pprint(derived_features)
+        # Create unique folders for this specific VIF run
+        threshold_dir = os.path.join(BASE_SAVE_DIR, f"vif_{threshold}")
+        scalers_dir = os.path.join(threshold_dir, "scalers")
+        models_dir = os.path.join(threshold_dir, "models")
+        for d in [scalers_dir, models_dir]:
+            os.makedirs(d, exist_ok=True)
 
-    # Scaling
-    ss_train = StandardScaler()
-    X_train_scaled = ss_train.fit_transform(X_train[derived_features])
-    X_test_scaled = ss_train.transform(X_test[derived_features])
+        # STEP A: VIF Redundancy Filter
+        vif_features = recursive_vif_selection(
+            X_train[feature_cols], vif_threshold=threshold
+        ).columns.tolist()
 
-    # Save Scaler
-    scaler_path = os.path.join(
-        scalers_target_folder, f"{m_type}_global_standard_scaler.pkl"
-    )
-    with open(scaler_path, "wb") as f:
-        pickle.dump(ss_train, f)
+        # STEP B: ReliefF Interaction Ranking
+        # Distance-based models require scaling
+        tmp_scaler = StandardScaler()
+        X_train_vif_scaled = tmp_scaler.fit_transform(X_train[vif_features])
 
-    print(f"\n--- Starting Grid Search for: {m_type} ---")
+        relief = ReliefF(
+            n_features_to_select=len(vif_features), n_neighbors=100, n_jobs=-1
+        )
+        relief.fit(X_train_vif_scaled, y_train.values)
+        relief_ranked = (
+            pd.Series(relief.feature_importances_, index=vif_features)
+            .sort_values(ascending=False)
+            .index.tolist()
+        )
 
-    validators = {
-        "StratifiedKFold": StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
-        "RepeatedStratifiedKFold": RepeatedStratifiedKFold(
-            n_splits=5, n_repeats=2, random_state=42
-        ),
-    }
+        # STEP C: RFECV Subset Optimization
+        selector_model = LinearSVC(dual=False, random_state=42, max_iter=5000)
+        rfecv = RFECV(
+            estimator=selector_model,
+            step=1,
+            cv=StratifiedKFold(5),
+            scoring="average_precision",
+            n_jobs=-1,
+        )
 
-    models_to_test = {
-        "LogisticRegression": {
-            "model": LogisticRegression(
-                max_iter=1000, solver="liblinear", random_state=42
-            ),
-            "params": {
-                "C": [0.1, 1, 10],
-                "penalty": ["l1", "l2"],
-                "class_weight": ["balanced", None],
-            },
-        },
-        "RandomForest": {
-            "model": RandomForestClassifier(random_state=42),
-            "params": {
-                "n_estimators": [100, 200],
-                "max_depth": [10, 20],
-                "class_weight": ["balanced", "balanced_subsample", None],
-            },
-        },
-        "XGBoost": {
-            "model": xgb.XGBClassifier(random_state=42, eval_metric="logloss"),
-            "params": {
-                "n_estimators": [100],
-                "learning_rate": [0.05, 0.1],
-                "scale_pos_weight": [1, 38, 75],
-            },
-        },
-        "LinearSVC": {
-            "model": CalibratedClassifierCV(
-                LinearSVC(dual=False, random_state=42, max_iter=2000)
-            ),
-            "params": {
-                "estimator__C": [0.1, 1, 10],  # Note the estimator__ prefix
-                "estimator__class_weight": ["balanced", {0: 1, 1: 76}, None],
-            },
-        },
-    }
-
-    results = []
-
-    for v_name, v_obj in validators.items():
-        for m_name, m_config in models_to_test.items():
-
-            grid_search = GridSearchCV(
-                estimator=m_config["model"],
-                param_grid=m_config["params"],
-                cv=v_obj,
-                scoring="average_precision",
-                n_jobs=-1,
-                error_score=0,
-            )
-
-            grid_search.fit(X_train_scaled, y_train)
-            best_model = grid_search.best_estimator_
-
-            # 1. Get the probabilities (or decision scores)
-            if hasattr(best_model, "predict_proba"):
-                y_scores = best_model.predict_proba(X_test_scaled)[:, 1]
-            else:
-                y_scores = best_model.decision_function(X_test_scaled)
-
-            # 2. Get Standard predictions (usually 0.5 threshold)
-            y_pred_standard = best_model.predict(X_test_scaled)
-
-            # 3. THRESHOLD CALIBRATION LOGIC
-            # Get all possible thresholds from the PR Curve
-            precisions, recalls, thresholds = precision_recall_curve(y_test, y_scores)
-
-            best_mcc = -1
-            best_threshold = 0.5
-
-            # Iterate through thresholds to maximize MCC
-            for threshold in thresholds:
-                y_pred_threshold = (y_scores >= threshold).astype(int)
-                current_mcc = matthews_corrcoef(y_test, y_pred_threshold)
-
-                if current_mcc > best_mcc:
-                    best_mcc = current_mcc
-                    best_threshold = threshold
-
-            # 4. Final Metrics
-            test_precision = precision_score(y_test, y_pred_standard, zero_division=0)
-            test_auprc = average_precision_score(y_test, y_scores)
-            standard_mcc = matthews_corrcoef(y_test, y_pred_standard)
-
-            # Save Model (including the best_threshold metadata)
-            # We wrap the model and threshold in a dict to use later in FastAPI
-            model_payload = {
-                "model": best_model,
-                "threshold": best_threshold,
-                "features": derived_features,
-            }
-
-            # might need to check for loop to see if it grabs the right threshold
-
-            model_filename = f"{v_name}_{m_name}_model.pkl"
-            model_save_path = os.path.join(
-                models_target_folder, f"{m_type}_{model_filename}"
-            )
-
-            with open(model_save_path, "wb") as f:
-                pickle.dump(model_payload, f)
-
-            results.append(
-                {
-                    "Model": m_name,
-                    "Validator": v_name,
-                    "Test_AUPRC": test_auprc,
-                    "Std_MCC": standard_mcc,
-                    "Opt_MCC": best_mcc,
-                    "Best_Threshold": best_threshold,
-                    "Best_Params": grid_search.best_params_,
-                }
-            )
-
-    # Display Results
-    results_df = pd.DataFrame(results)
-    print(f"\nFinal Comparison Table for {m_type}:")
-    # Sorting by Optimized MCC shows which model is best after we "fix" the threshold
-    print(
-        results_df.sort_values(by="Opt_MCC", ascending=False)[
-            ["Model", "Validator", "Test_AUPRC", "Std_MCC", "Opt_MCC", "Best_Threshold"]
+        # Pass ranked features to RFECV
+        X_rfecv_input = X_train_vif_scaled[
+            :, [vif_features.index(f) for f in relief_ranked]
         ]
-    )
+        rfecv.fit(X_rfecv_input, y_train)
+        golden_features = np.array(relief_ranked)[rfecv.support_].tolist()
 
-# Visualize the last run's PR Curve
-# PrecisionRecallDisplay.from_predictions(y_test, y_scores, name=m_name)
-# plt.title(f"Precision-Recall Curve: {m_name}")
-# plt.show()
+        # STEP D: Final Scaling (On Golden Features Only)
+        ss_train = StandardScaler()
+        X_train_final = ss_train.fit_transform(X_train[golden_features])
+        X_test_final = ss_train.transform(X_test[golden_features])
+
+        # Save the scaler for this specific VIF path
+        with open(os.path.join(scalers_dir, f"{m_type}_scaler.pkl"), "wb") as f:
+            pickle.dump(ss_train, f)
+
+        validators = {
+            "StratifiedKFold": StratifiedKFold(
+                n_splits=5, shuffle=True, random_state=42
+            ),
+            "RepeatedStratifiedKFold": RepeatedStratifiedKFold(
+                n_splits=5, n_repeats=2, random_state=42
+            ),
+        }
+        # STEP E: Model Grid Search & Evaluation
+        models_to_test = {
+            "LogisticRegression": {
+                "model": LogisticRegression(
+                    max_iter=1000, solver="liblinear", random_state=42
+                ),
+                "params": {
+                    "C": [0.1, 1, 10],
+                    "penalty": ["l1", "l2"],
+                    "class_weight": ["balanced", None],
+                },
+            },
+            "RandomForest": {
+                "model": RandomForestClassifier(random_state=42),
+                "params": {
+                    "n_estimators": [100, 200],
+                    "max_depth": [10, 20],
+                    "class_weight": ["balanced", "balanced_subsample", None],
+                },
+            },
+            "XGBoost": {
+                "model": xgb.XGBClassifier(random_state=42, eval_metric="logloss"),
+                "params": {
+                    "n_estimators": [100],
+                    "learning_rate": [0.05, 0.1],
+                    "scale_pos_weight": [1, 38, 75],
+                },
+            },
+            "LinearSVC": {
+                "model": CalibratedClassifierCV(
+                    LinearSVC(dual=False, random_state=42, max_iter=2000)
+                ),
+                "params": {
+                    "estimator__C": [0.1, 1, 10],  # Note the estimator__ prefix
+                    "estimator__class_weight": ["balanced", {0: 1, 1: 76}, None],
+                },
+            },
+            "EBM": {
+                "model": ExplainableBoostingClassifier(random_state=42),
+                "params": {
+                    "learning_rate": [0.01, 0.05],
+                    "max_bins": [256],
+                    "interactions": [10, 15],  # EBM searches for stat combinations
+                },
+            },
+            "BalancedRandomForest": {
+                "model": BalancedRandomForestClassifier(
+                    random_state=42, sampling_strategy="auto"
+                ),
+                "params": {
+                    "n_estimators": [100, 200],
+                    "max_depth": [10, 20],
+                    "replacement": [True, False],
+                },
+            },
+        }
+
+        for v_name, v_obj in validators.items():
+            for m_name, m_config in models_to_test.items():
+                # Create the scorer
+                mcc_scorer = make_scorer(matthews_corrcoef)
+
+                grid = GridSearchCV(
+                    m_config["model"],
+                    m_config["params"],
+                    cv=v_obj,
+                    scoring=mcc_scorer,
+                    n_jobs=-1,
+                )
+                grid.fit(X_train_final, y_train)
+                best_model = grid.best_estimator_
+
+                # Calibration & Metrics
+                if hasattr(best_model, "predict_proba"):
+                    y_scores = best_model.predict_proba(X_test_final)[:, 1]
+                else:
+                    y_scores = best_model.decision_function(X_test_final)
+
+                precisions, recalls, thresholds = precision_recall_curve(
+                    y_test, y_scores
+                )
+
+                # Find Threshold that maximizes MCC
+                best_mcc = -1
+                opt_t = 0.5
+                for t in thresholds:
+                    mcc = matthews_corrcoef(y_test, (y_scores >= t).astype(int))
+                    if mcc > best_mcc:
+                        best_mcc, opt_t = mcc, t
+
+                # Calculate Final Metrics at Optimal Threshold
+                final_preds = (y_scores >= opt_t).astype(int)
+                opt_precision = precision_score(y_test, final_preds, zero_division=0)
+                auprc = average_precision_score(y_test, y_scores)
+
+                # 3. SAVE RESULTS
+                study_summary.append(
+                    {
+                        "Player_Type": m_type,
+                        "VIF_Threshold": threshold,
+                        "Model": m_name,
+                        "Validator": v_name,
+                        "Num_Features": len(golden_features),
+                        "Opt_MCC": best_mcc,
+                        "Opt_Precision": opt_precision,
+                        "AUPRC": auprc,
+                        "Opt_Threshold": opt_t,
+                        "Golden_Features": ", ".join(golden_features),
+                    }
+                )
+
+                # Save model payload
+                payload = {
+                    "model": best_model,
+                    "threshold": opt_t,
+                    "features": golden_features,
+                }
+                model_path = os.path.join(
+                    models_dir, f"{m_type}_{v_name}_{m_name}_model.pkl"
+                )
+                with open(model_path, "wb") as f:
+                    pickle.dump(payload, f)
+
+# 4. FINAL EXPORT
+results_df = pd.DataFrame(study_summary)
+results_df.sort_values(
+    by=["Player_Type", "Opt_MCC"], ascending=[True, False], inplace=True
+)
+results_df.to_csv("vif_study_results.csv", index=False)
+
+print("\n" + "=" * 40)
+print("COMPLETED: Results saved to 'vif_study_results.csv'")
+print("=" * 40)
+print(results_df)

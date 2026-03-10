@@ -66,21 +66,32 @@ app = FastAPI()
 
 def get_best_model(m_type: str):
     if m_type == "hitter":
-        return f"{m_type}_StratifiedKFold_XGBoost_model.pkl"
+        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_LinearSVC_model.pkl"
     elif m_type == "pitcher":
-        return f"{m_type}_StratifiedKFold_RandomForest_model.pkl"
+        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_RandomForest_model.pkl"
     else:
         raise ValueError(f"{m_type} is an invalid model type")
 
 
-def load_model_assets(m_type: str):
+def load_model_assets(m_type: str, version: str):
     """Helper to load the dictionary payload and scaler"""
-    MODEL_DIR = "trained_models_v2"
-    scalers_path = os.path.join(MODEL_DIR, "scalers")
-    models_path = os.path.join(MODEL_DIR, "models")
+
+    model_dir = ""
+
+    if version == "v2":
+        model_dir = "trained_models_v2"
+    elif version == "v3":
+        model_dir = ""
+    scalers_path = os.path.join(model_dir, "vif_threshold_study/vif_10.01/scalers")
+    models_path = os.path.join(model_dir, "")
 
     # Load Scaler
-    scaler_file = f"{m_type}_global_standard_scaler.pkl"
+    scaler_file = ""
+    if version == "v2":
+        scaler_file = f"{m_type}_global_standard_scaler.pkl"
+    elif version == "v3":
+        scaler_file = f"{m_type}_scaler.pkl"
+
     with open(os.path.join(scalers_path, scaler_file), "rb") as f:
         scaler = pickle.load(f)
 
@@ -104,7 +115,7 @@ def search_players(request: SearchPlayersRequest):
 @app.post("/predict_hof_batch_hitter")
 def predict_hof_batch(request: PredictHallOfFameRequest):
     # 1. Load Assets
-    scaler, payload = load_model_assets("hitter")
+    scaler, payload = load_model_assets("hitter", "v3")
     model = payload["model"]
     threshold = payload["threshold"]
     feature_cols = payload["features"]  # Use the features determined by Recursive VIF
@@ -150,13 +161,16 @@ def predict_hof_batch(request: PredictHallOfFameRequest):
             }
         )
 
+    print(
+        f"{len(results)} hitters, {len([r for r in results if r['met_threshold'] == True])} correct {len([r for r in results if r['met_threshold'] == True])/len(results)}"
+    )
     return {"predictions": results}
 
 
 @app.post("/predict_hof_batch_pitcher")
 def predict_hof_batch(request: PredictHallOfFameRequest):
     # 1. Load Assets
-    scaler, payload = load_model_assets("pitcher")
+    scaler, payload = load_model_assets("pitcher", "v3")
     model = payload["model"]
     threshold = payload["threshold"]
     feature_cols = payload["features"]
@@ -200,6 +214,10 @@ def predict_hof_batch(request: PredictHallOfFameRequest):
                 "model_threshold_used": round(native_threshold, 4),
             }
         )
+
+    print(
+        f"{len(results)} pitchers, {len([r for r in results if r['met_threshold'] == True])} correct {len([r for r in results if r['met_threshold'] == True])/len(results)}"
+    )
 
     return {"predictions": results}
 
