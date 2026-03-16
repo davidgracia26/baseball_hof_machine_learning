@@ -4,7 +4,6 @@ from pydantic import BaseModel
 import pickle
 from preprocess import Preprocess
 import os
-import pprint
 
 
 class SearchPlayersRequest(BaseModel):
@@ -73,7 +72,7 @@ def get_best_model(m_type: str):
         raise ValueError(f"{m_type} is an invalid model type")
 
 
-def load_model_assets(m_type: str, version: str):
+def _load_model_assets(m_type: str, version: str):
     """Helper to load the dictionary payload and scaler"""
 
     model_dir = ""
@@ -104,30 +103,16 @@ def load_model_assets(m_type: str, version: str):
     return scaler, payload
 
 
-@app.post("/")
-def search_players(request: SearchPlayersRequest):
-
-    players = create_players(request)
-
-    return {"players": players}
-
-
-@app.post("/predict_hof_batch_hitter")
-def predict_hof_batch(request: PredictHallOfFameRequest):
+def _create_response(df, player_ids, player_type, version):
     # 1. Load Assets
-    scaler, payload = load_model_assets("hitter", "v3")
+    scaler, payload = _load_model_assets(player_type, version)
     model = payload["model"]
     threshold = payload["threshold"]
     feature_cols = payload["features"]  # Use the features determined by Recursive VIF
 
-    pprint.pprint(f"model: {model}")
-    pprint.pprint(f"threshold: {threshold}")
-    pprint.pprint(f"feature_cols: {feature_cols}")
-
     # 2. Get Data
-    df = Preprocess().get_df_for_modeling_hitters()
     filtered_df = df[
-        df["playerID"].str.lower().isin([pid.lower() for pid in request.playerIds])
+        df["playerID"].str.lower().isin([pid.lower() for pid in player_ids])
     ]
 
     if filtered_df.empty:
@@ -175,66 +160,24 @@ def predict_hof_batch(request: PredictHallOfFameRequest):
     return {"predictions": results}
 
 
+@app.post("/")
+def search_players(request: SearchPlayersRequest):
+
+    players = create_players(request)
+
+    return {"players": players}
+
+
+@app.post("/predict_hof_batch_hitter")
+def predict_hof_batch(request: PredictHallOfFameRequest):
+    df = Preprocess().get_df_for_modeling_hitters()
+    return _create_response(df, request.playerIds, "hitter", "v3")
+
+
 @app.post("/predict_hof_batch_pitcher")
 def predict_hof_batch(request: PredictHallOfFameRequest):
-    # 1. Load Assets
-    scaler, payload = load_model_assets("pitcher", "v3")
-    model = payload["model"]
-    threshold = payload["threshold"]
-    feature_cols = payload["features"]
-
-    pprint.pprint(f"model: {model}")
-    pprint.pprint(f"threshold: {threshold}")
-    pprint.pprint(f"feature_cols: {feature_cols}")
-
-    # 2. Get Data
     df = Preprocess().get_df_for_modeling_pitchers()
-    filtered_df = df[
-        df["playerID"].str.lower().isin([pid.lower() for pid in request.playerIds])
-    ]
-
-    if filtered_df.empty:
-        return {"error": "No players found"}
-
-    # 3. Predict
-    X_scaled = scaler.transform(filtered_df[feature_cols])
-
-    if hasattr(model, "predict_proba"):
-        probs = model.predict_proba(X_scaled)[:, 1]
-    else:
-        probs = model.decision_function(X_scaled)
-
-    # 4. Map Results
-    results = []
-    native_threshold = float(threshold)
-
-    for i, (_, row) in enumerate(filtered_df.iterrows()):
-        current_prob = float(probs[i])
-        is_hof = bool(current_prob >= native_threshold)
-
-        results.append(
-            {
-                "playerId": str(row["playerID"]),
-                "player_name": " ".join(
-                    df.loc[
-                        df["playerID"] == row["playerID"], ["nameFirst", "nameLast"]
-                    ].values[0]
-                ),
-                # Change "Missed" to "Below Threshold" for a more professional tone
-                "result": "Hall of Fame Caliber" if is_hof else "Below Threshold",
-                "probability": f"{current_prob:.2%}",
-                "met_threshold": is_hof,
-                # Added: A label to explain WHY the threshold is lower
-                "model_logic": "Optimized for High Recall (Legend Inclusion)",
-                "model_threshold_used": f"{native_threshold:.2%}",
-            }
-        )
-
-    print(
-        f"{len(results)} pitchers, {len([r for r in results if r['met_threshold'] == True])} correct {len([r for r in results if r['met_threshold'] == True])/len(results)}"
-    )
-
-    return {"predictions": results}
+    return _create_response(df, request.playerIds, "pitcher", "v3")
 
 
 # {
