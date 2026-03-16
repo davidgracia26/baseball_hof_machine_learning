@@ -22,6 +22,9 @@ from sklearn.metrics import (
     average_precision_score,
     precision_score,
     make_scorer,
+    brier_score_loss,
+    fbeta_score,
+    recall_score,
 )
 from sklearn.calibration import CalibratedClassifierCV
 from skrebate import ReliefF
@@ -68,6 +71,8 @@ for modeling_type_run in modeling_type_runs:
     X = df[feature_cols]
     y = df[label_col]
 
+    y = y.astype(int)
+
     # Split once per player type to keep comparisons fair
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
@@ -106,12 +111,13 @@ for modeling_type_run in modeling_type_runs:
         )
 
         # STEP C: RFECV Subset Optimization
+        f2_scorer = make_scorer(fbeta_score, beta=2)
         selector_model = LinearSVC(dual=False, random_state=42, max_iter=5000)
         rfecv = RFECV(
             estimator=selector_model,
             step=1,
             cv=StratifiedKFold(5),
-            scoring="average_precision",
+            scoring=f2_scorer,
             n_jobs=-1,
         )
 
@@ -148,7 +154,7 @@ for modeling_type_run in modeling_type_runs:
                 "params": {
                     "C": [0.1, 1, 10],
                     "penalty": ["l1", "l2"],
-                    "class_weight": ["balanced", None],
+                    "class_weight": ["balanced", None, {0: 1, 1: 76}],
                 },
             },
             "RandomForest": {
@@ -156,7 +162,12 @@ for modeling_type_run in modeling_type_runs:
                 "params": {
                     "n_estimators": [100, 200],
                     "max_depth": [10, 20],
-                    "class_weight": ["balanced", "balanced_subsample", None],
+                    "class_weight": [
+                        "balanced",
+                        "balanced_subsample",
+                        None,
+                        {0: 1, 1: 76},
+                    ],
                 },
             },
             "XGBoost": {
@@ -164,12 +175,14 @@ for modeling_type_run in modeling_type_runs:
                 "params": {
                     "n_estimators": [100],
                     "learning_rate": [0.05, 0.1],
-                    "scale_pos_weight": [1, 38, 75],
+                    "scale_pos_weight": [60, 70, 80],
                 },
             },
             "LinearSVC": {
                 "model": CalibratedClassifierCV(
-                    LinearSVC(dual=False, random_state=42, max_iter=2000)
+                    LinearSVC(dual=False, random_state=42, max_iter=2000),
+                    method="isotonic",
+                    cv=5,
                 ),
                 "params": {
                     "estimator__C": [0.1, 1, 10],  # Note the estimator__ prefix
@@ -192,6 +205,7 @@ for modeling_type_run in modeling_type_runs:
                     "n_estimators": [100, 200],
                     "max_depth": [10, 20],
                     "replacement": [True, False],
+                    "class_weight": ["balanced", "balanced_subsample", {0: 1, 1: 76}],
                 },
             },
         }
@@ -199,13 +213,13 @@ for modeling_type_run in modeling_type_runs:
         for v_name, v_obj in validators.items():
             for m_name, m_config in models_to_test.items():
                 # Create the scorer
-                mcc_scorer = make_scorer(matthews_corrcoef)
+                f2_scorer = make_scorer(fbeta_score, beta=2)
 
                 grid = GridSearchCV(
                     m_config["model"],
                     m_config["params"],
                     cv=v_obj,
-                    scoring=mcc_scorer,
+                    scoring=f2_scorer,
                     n_jobs=-1,
                 )
                 grid.fit(X_train_final, y_train)
@@ -221,18 +235,43 @@ for modeling_type_run in modeling_type_runs:
                     y_test, y_scores
                 )
 
+                # Brier Score (Lower is better)
+                brier = brier_score_loss(y_test, y_scores)
+
                 # Find Threshold that maximizes MCC
+                target_recall = 0.9
                 best_mcc = -1
                 opt_t = 0.5
                 for t in thresholds:
-                    mcc = matthews_corrcoef(y_test, (y_scores >= t).astype(int))
-                    if mcc > best_mcc:
-                        best_mcc, opt_t = mcc, t
+                    preds = (y_scores >= t).astype(int)
+                    current_recall = recall_score(y_test, preds)
+                    current_mcc = matthews_corrcoef(y_test, preds)
 
-                # Calculate Final Metrics at Optimal Threshold
-                final_preds = (y_scores >= opt_t).astype(int)
+                    if current_recall >= target_recall:
+                        if current_mcc > best_mcc:
+                            best_mcc, opt_t = current_mcc, t
+
+                # If no threshold hit x% recall, default to the highest recall found
+                # if best_mcc == -1:
+                #     opt_t = thresholds[np.argmax(recalls)]
+
+                # # Calculate Final Metrics at Optimal Threshold
+                # final_preds = (y_scores >= opt_t).astype(int)
+
+                # Fallback: If no threshold hits your target, just take the max recall possible
+                if best_mcc == -1:
+                    opt_t = thresholds[np.argmax(recalls)]
+                    final_preds = (y_scores >= opt_t).astype(int)
+                    best_mcc = matthews_corrcoef(y_test, final_preds)
+                else:
+                    final_preds = (y_scores >= opt_t).astype(int)
+
                 opt_precision = precision_score(y_test, final_preds, zero_division=0)
+                opt_recall = recall_score(y_test, final_preds, zero_division=0)
                 auprc = average_precision_score(y_test, y_scores)
+
+                false_negatives = np.sum((y_test == 1) & (final_preds == 0))
+                total_hof_in_test = np.sum(y_test == 1)
 
                 # 3. SAVE RESULTS
                 study_summary.append(
@@ -243,10 +282,14 @@ for modeling_type_run in modeling_type_runs:
                         "Validator": v_name,
                         "Num_Features": len(golden_features),
                         "Opt_MCC": best_mcc,
+                        "Brier_Score": brier,
+                        "Opt_Recall": opt_recall,
                         "Opt_Precision": opt_precision,
                         "AUPRC": auprc,
                         "Opt_Threshold": opt_t,
                         "Golden_Features": ", ".join(golden_features),
+                        "Missed_HOFers": false_negatives,
+                        "Total_HOF_in_Test": total_hof_in_test,
                     }
                 )
 
@@ -264,9 +307,6 @@ for modeling_type_run in modeling_type_runs:
 
 # 4. FINAL EXPORT
 results_df = pd.DataFrame(study_summary)
-results_df.sort_values(
-    by=["Player_Type", "Opt_MCC"], ascending=[True, False], inplace=True
-)
 results_df.to_csv("vif_study_results.csv", index=False)
 
 print("\n" + "=" * 40)

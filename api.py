@@ -66,9 +66,9 @@ app = FastAPI()
 
 def get_best_model(m_type: str):
     if m_type == "hitter":
-        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_LinearSVC_model.pkl"
+        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_EBM_model.pkl"
     elif m_type == "pitcher":
-        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_RandomForest_model.pkl"
+        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_EBM_model.pkl"
     else:
         raise ValueError(f"{m_type} is an invalid model type")
 
@@ -154,10 +154,18 @@ def predict_hof_batch(request: PredictHallOfFameRequest):
         results.append(
             {
                 "playerId": str(row["playerID"]),
-                "result": "Hall of Famer" if is_hof else "Missed",
+                "player_name": " ".join(
+                    df.loc[
+                        df["playerID"] == row["playerID"], ["nameFirst", "nameLast"]
+                    ].values[0]
+                ),
+                # Change "Missed" to "Below Threshold" for a more professional tone
+                "result": "Hall of Fame Caliber" if is_hof else "Below Threshold",
                 "probability": f"{current_prob:.2%}",
                 "met_threshold": is_hof,
-                "model_threshold_used": round(native_threshold, 4),
+                # Added: A label to explain WHY the threshold is lower
+                "model_logic": "Optimized for High Recall (Legend Inclusion)",
+                "model_threshold_used": f"{native_threshold:.2%}",
             }
         )
 
@@ -198,20 +206,27 @@ def predict_hof_batch(request: PredictHallOfFameRequest):
 
     # 4. Map Results
     results = []
-    # Ensure threshold is a standard float
     native_threshold = float(threshold)
 
     for i, (_, row) in enumerate(filtered_df.iterrows()):
-        current_prob = float(probs[i])  # Ensure standard float
+        current_prob = float(probs[i])
         is_hof = bool(current_prob >= native_threshold)
 
         results.append(
             {
                 "playerId": str(row["playerID"]),
-                "result": "Hall of Famer" if is_hof else "Missed",
+                "player_name": " ".join(
+                    df.loc[
+                        df["playerID"] == row["playerID"], ["nameFirst", "nameLast"]
+                    ].values[0]
+                ),
+                # Change "Missed" to "Below Threshold" for a more professional tone
+                "result": "Hall of Fame Caliber" if is_hof else "Below Threshold",
                 "probability": f"{current_prob:.2%}",
                 "met_threshold": is_hof,
-                "model_threshold_used": round(native_threshold, 4),
+                # Added: A label to explain WHY the threshold is lower
+                "model_logic": "Optimized for High Recall (Legend Inclusion)",
+                "model_threshold_used": f"{native_threshold:.2%}",
             }
         )
 
