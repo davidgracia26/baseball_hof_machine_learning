@@ -65,9 +65,16 @@ app = FastAPI()
 
 def get_best_model(m_type: str):
     if m_type == "hitter":
-        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_EBM_model.pkl"
+        return f"vif_threshold_study/f2/vif_10.01/models/{m_type}_RepeatedStratifiedKFold_LogisticRegression_model.pkl"  # 26/27
+        # return f"vif_threshold_study/precision/vif_10.01/models/{m_type}_RepeatedStratifiedKFold_EBM_model.pkl" 0/27
+        # return f"vif_threshold_study/auprc/vif_10.01/models/{m_type}_StratifiedKFold_EBM_model.pkl" #0/27
+        # return f"vif_threshold_study/auprc/vif_10.01/models/{m_type}_StratifiedKFold_XGBoost_model.pkl"  # 8/27
+
     elif m_type == "pitcher":
-        return f"vif_threshold_study/vif_10.01/models/{m_type}_StratifiedKFold_EBM_model.pkl"
+        return f"vif_threshold_study/f2/vif_10.01/models/{m_type}_RepeatedStratifiedKFold_LogisticRegression_model.pkl"  # 6/8
+        # return f"vif_threshold_study/precision/vif_10.01/models/{m_type}_StratifiedKFold_LogisticRegression_model.pkl" 0/8
+        # return f"vif_threshold_study/auprc/vif_10.01/models/{m_type}_StratifiedKFold_EBM_model.pkl" # 0/8
+        # return f"vif_threshold_study/f2/vif_10.01/models/{m_type}_RepeatedStratifiedKFold_XGBoost_model.pkl"
     else:
         raise ValueError(f"{m_type} is an invalid model type")
 
@@ -81,7 +88,15 @@ def _load_model_assets(m_type: str, version: str):
         model_dir = "trained_models_v2"
     elif version == "v3":
         model_dir = ""
-    scalers_path = os.path.join(model_dir, "vif_threshold_study/vif_10.01/scalers")
+    scalers_path = os.path.join(
+        # model_dir, "vif_threshold_study/recall/vif_10.01/scalers"
+        # model_dir,
+        # "vif_threshold_study/precision/vif_10.01/scalers",
+        # model_dir,
+        # "vif_threshold_study/auprc/vif_10.01/scalers",
+        model_dir,
+        "vif_threshold_study/f2/vif_10.01/scalers",
+    )
     models_path = os.path.join(model_dir, "")
 
     # Load Scaler
