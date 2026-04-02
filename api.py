@@ -71,7 +71,7 @@ def get_best_model(m_type: str):
         # return f"vif_threshold_study/auprc/vif_10.01/models/{m_type}_StratifiedKFold_XGBoost_model.pkl"  # 8/27
 
     elif m_type == "pitcher":
-        return f"vif_threshold_study/f2/vif_10.01/models/{m_type}_RepeatedStratifiedKFold_LogisticRegression_model.pkl"  # 6/8
+        return f"vif_threshold_study/f2/vif_5.01/models/{m_type}_RepeatedStratifiedKFold_LogisticRegression_model.pkl"  # 6/8
         # return f"vif_threshold_study/precision/vif_10.01/models/{m_type}_StratifiedKFold_LogisticRegression_model.pkl" 0/8
         # return f"vif_threshold_study/auprc/vif_10.01/models/{m_type}_StratifiedKFold_EBM_model.pkl" # 0/8
         # return f"vif_threshold_study/f2/vif_10.01/models/{m_type}_RepeatedStratifiedKFold_XGBoost_model.pkl"
@@ -95,7 +95,11 @@ def _load_model_assets(m_type: str, version: str):
         # model_dir,
         # "vif_threshold_study/auprc/vif_10.01/scalers",
         model_dir,
-        "vif_threshold_study/f2/vif_10.01/scalers",
+        (
+            "vif_threshold_study/f2/vif_10.01/scalers"
+            if m_type == "hitter"
+            else "vif_threshold_study/f2/vif_5.01/scalers"
+        ),
     )
     models_path = os.path.join(model_dir, "")
 
@@ -105,6 +109,9 @@ def _load_model_assets(m_type: str, version: str):
         scaler_file = f"{m_type}_global_standard_scaler.pkl"
     elif version == "v3":
         scaler_file = f"{m_type}_scaler.pkl"
+
+    print(scalers_path)
+    print(scaler_file)
 
     with open(os.path.join(scalers_path, scaler_file), "rb") as f:
         scaler = pickle.load(f)
@@ -164,13 +171,13 @@ def _create_response(df, player_ids, player_type, version):
                 "probability": f"{current_prob:.2%}",
                 "met_threshold": is_hof,
                 # Added: A label to explain WHY the threshold is lower
-                "model_logic": "Optimized for High Recall (Legend Inclusion)",
+                # "model_logic": "Optimized for High Recall (Legend Inclusion)",
                 "model_threshold_used": f"{native_threshold:.2%}",
             }
         )
 
     print(
-        f"{len(results)} hitters, {len([r for r in results if r['met_threshold'] == True])} correct {len([r for r in results if r['met_threshold'] == True])/len(results)}"
+        f"{len(results)} subjects, {len([r for r in results if r['met_threshold'] == True])} correct {len([r for r in results if r['met_threshold'] == True])/len(results)}"
     )
     return {"predictions": results}
 
